@@ -141,6 +141,8 @@ function main($path) {
     global $slash;
     global $drive;
 
+    if (!function_exists('curl_init')) return output('<font color="red">Need curl</font>, please install php-curl.', 500);
+
     $slash = '/';
     if (strpos(__DIR__, ':')) $slash = '\\';
     $drive = null;
@@ -464,8 +466,11 @@ function main($path) {
     if ($files['type'] == 'file' && !isset($_GET['preview'])) {
         if ($_SERVER['ishidden'] < 4 || (!!getConfig('downloadencrypt', $_SERVER['disktag']) && $files['name'] != getConfig('passfile'))) {
             $url = $files['url'];
-            if (strtolower(splitlast($files['name'], '.')[1]) == 'html') return output($files['content']['body'], $files['content']['stat']);
-            else {
+            $exp = strtolower(splitlast($files['name'], '.')[1]);
+            if ($exp == 'htm' || $exp == 'html') {
+                // HTML file display
+                return output($files['content']['body'], $files['content']['stat']);
+            } else {
                 if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && strtotime($files['time']) == strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE'])) return output('', 304);
                 $fileConduitSize = getConfig('fileConduitSize', $_SERVER['disktag']);
                 $fileConduitCacheTime = getConfig('fileConduitCacheTime', $_SERVER['disktag']);
@@ -499,6 +504,9 @@ function main($path) {
                             //'access-control-allow-origin' => '*',
                             //'access-control-expose-headers' => 'Content-Length, WWW-Authenticate, Location, Accept-Ranges',
                             'Content-Type' => $files['mime'],
+                            //'Content-Disposition' => 'attachment; filename*="utf-8\'\'' . str_replace(".", "%2E", str_replace("+", "%20", urlencode($files['name']))) . '"; filename="' . $files['name'] . '"',
+                            'Content-Disposition' => 'attachment; filename*="utf-8\'\'' . str_replace("+", "%20", urlencode($files['name'])) . '"; filename="' . $files['name'] . '"',
+                            //'Content-Disposition' => 'attachment; filename*="utf-8\'\'' . iconv("GBK", "utf-8", $files['name']) . '"; filename="' . $files['name'] . '"',
                             'Cache-Control' => 'max-age=' . $fileConduitCacheTime,
                             //'Cache-Control' => 'max-age=0',
                             'Last-Modified' => gmdate('D, d M Y H:i:s T', strtotime($files['time']))
@@ -760,7 +768,7 @@ function chkTxtCode($str) {
 
 function getconstStr($str) {
     global $constStr;
-    if ($constStr[$str][$constStr['language']] != '') return $constStr[$str][$constStr['language']];
+    if (isset($constStr[$str][$constStr['language']]) && $constStr[$str][$constStr['language']] != '') return $constStr[$str][$constStr['language']];
     return $constStr[$str]['en-us'];
 }
 
@@ -1082,7 +1090,7 @@ function output($body, $statusCode = 200, $headers = ['Content-Type' => 'text/ht
     if (baseclassofdrive() == 'Aliyundrive' || baseclassofdrive() == 'BaiduDisk') $headers['Referrer-Policy'] = 'no-referrer';
     //$headers['Referrer-Policy'] = 'same-origin';
     //$headers['X-Frame-Options'] = 'sameorigin';
-    if (!isset($_SERVER['Content-Type'])) $headers['Content-Type'] = 'text/html';
+    if (!isset($headers['Content-Type'])) $headers['Content-Type'] = 'text/html';
     return [
         'isBase64Encoded' => $isBase64Encoded,
         'statusCode' => $statusCode,
@@ -1379,7 +1387,7 @@ function EnvOpt($needUpdate = 0) {
             return message($html, $title, 400);
         } else {
             //WaitSCFStat();
-            $html .= getconstStr('UpdateSuccess') . '<br><a href="">' . getconstStr('Back') . '</a><script>var status = "' . $response['DplStatus'] . '";</script>';
+            $html .= getconstStr('UpdateSuccess') . '<br><a href="">' . getconstStr('Back') . '</a><script>var status = "' . (isset($response['DplStatus']) ? $response['DplStatus'] : "") . '";</script>';
             $title = getconstStr('Setup');
             return message($html, $title, 202, 1);
         }
@@ -2457,6 +2465,7 @@ function render_list($path = '', $files = []) {
         }
         $DriverFile = scandir(__DIR__ . $slash . 'disk');
         $Driver_arr = null;
+        $Driver_arr = [];
         foreach ($DriverFile as $v1) {
             if ($v1 != '.' && $v1 != '..') {
                 $v1 = splitlast($v1, '.php')[0];
